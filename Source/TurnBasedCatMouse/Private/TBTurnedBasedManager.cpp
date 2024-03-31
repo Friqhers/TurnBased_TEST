@@ -48,9 +48,7 @@ void ATBTurnedBasedManager::StartTurnBasedGame()
 	SquareMapGeneratorRef = GetWorld()->SpawnActor<ATBSquareMapGenerator>(SquareMapGenClass, GetActorLocation(), FRotator::ZeroRotator, Params);
 
 	// generate the map
-	SquareMapGeneratorRef->GenerateSquareMap_V2();
-
-	return;
+	SquareMapGeneratorRef->GenerateSquareMap();
 	
 	InitSpawnMammals();
 
