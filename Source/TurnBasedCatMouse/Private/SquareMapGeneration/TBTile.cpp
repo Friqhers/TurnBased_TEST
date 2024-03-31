@@ -56,7 +56,7 @@ ATBMammalBase* ATBTile::SpawnMammal(TSubclassOf<ATBMammalBase> MammalClass)
 	FVector TileOrigin, TileHalfExtents;
 	GetActorBounds(false, TileOrigin, TileHalfExtents, true);
 	MammalRef->SetActorLocation(GetActorLocation() + FVector(0,0,TileHalfExtents.Z));
-	MammalRef->SetCurrentTile(this);
+	//MammalRef->SetCurrentTile(this);
 
 	// Mark the tile as not empty
 	SetTileEmpty(false);

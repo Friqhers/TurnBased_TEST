@@ -2,9 +2,7 @@
 
 
 #include "Mammals/TBMammalBase.h"
-
 #include "Kismet/KismetMathLibrary.h"
-#include "SquareMapGeneration/TBSquareMapGenerator.h"
 #include "SquareMapGeneration/TBTile.h"
 
 // Sets default values
@@ -47,14 +45,14 @@ void ATBMammalBase::Tick(float DeltaTime)
 	}
 }
 
-void ATBMammalBase::SetCurrentTile(ATBTile* TargetTile)
+void ATBMammalBase::SetCurrentTilePos(FVector2D TargetPos)
 {
-	CurrentTile = TargetTile;
+	CurrentTilePos = TargetPos;
 }
 
-ATBTile* ATBMammalBase::GetCurrentTile()
+FVector2D ATBMammalBase::GetCurrentTilePos()
 {
-	return CurrentTile;
+	return CurrentTilePos;
 }
 
 void ATBMammalBase::ExecuteTurn()
@@ -62,8 +60,7 @@ void ATBMammalBase::ExecuteTurn()
 	//@TODO: do these in tryeat func
 	if(bCanEat)
 	{
-		EatTarget = GetRandomEatTarget();
-		if(EatTarget)
+		if(GetRandomEatTarget(EatTarget))
 		{
 			StartEat(EatTarget);
 			return;
@@ -76,18 +73,20 @@ void ATBMammalBase::ExecuteTurn()
 	//TryMove();
 }
 
-ATBTile* ATBMammalBase::GetRandomEatTarget() const
+bool ATBMammalBase::GetRandomEatTarget(FTileInfo& EatTargetTile) const
 {
-	TArray<ATBTile*> AdjacentTiles = CurrentTile->GetAllAdjacentTiles();
+	// create current tile info, only the CurrentTilePos is important
+	const FTileInfo CurrentTile = FTileInfo(CurrentTilePos, FVector::ZeroVector, false, nullptr);
+	TArray<FTileInfo> AdjacentTiles = MapGeneratorRef->GetAllAdjacentTiles(CurrentTile);
 
 	if(AdjacentTiles.Num() <= 0)
-		return nullptr;
+		return false;
 
 	// find if there any eatable mammal within 1 unit
-	TArray<ATBTile*> EatableMammalTiles;
+	TArray<FTileInfo> EatableMammalTiles;
 	for(int i = 0 ; i < AdjacentTiles.Num() ; i++)
 	{
-		if(!AdjacentTiles[i]->IsTileEmpty() && AdjacentTiles[i]->MammalRef->GetClass() == EatableMammalClass)
+		if(!AdjacentTiles[i].bIsEmptyTile && AdjacentTiles[i].MammalRef && AdjacentTiles[i].MammalRef->GetClass() == EatableMammalClass)
 		{
 			EatableMammalTiles.Add(AdjacentTiles[i]);
 		}
@@ -95,16 +94,20 @@ ATBTile* ATBMammalBase::GetRandomEatTarget() const
 
 	// nothing eatable
 	if(EatableMammalTiles.Num() <= 0)
-		return nullptr;
+		return false;
 	
 	// select random target mammal
 	const int RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, EatableMammalTiles.Num()-1);
-	return EatableMammalTiles[RandomIndex];
+	EatTargetTile = EatableMammalTiles[RandomIndex];
+
+	return true;
 }
 
 void ATBMammalBase::StartRandomMove()
 {
-	const TArray<ATBTile*> AdjacentEmptyTiles = CurrentTile->GetAllAdjacentEmptyTiles();
+	FTileInfo CurrentTile = FTileInfo(CurrentTilePos, FVector::ZeroVector, false, this);
+	
+	const TArray<FTileInfo> AdjacentEmptyTiles = MapGeneratorRef->GetAllAdjacentEmptyTiles(CurrentTile);
 
 	if(AdjacentEmptyTiles.Num() <= 0)
 	{
@@ -113,38 +116,41 @@ void ATBMammalBase::StartRandomMove()
 	}
 
 	// empty current tile
-	CurrentTile->SetTileEmpty(true);
-	CurrentTile->MammalRef = nullptr;
+	MapGeneratorRef->ClearTile(CurrentTilePos.X, CurrentTilePos.Y);
 
 	// select random target empty tile to move
 	const int RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, AdjacentEmptyTiles.Num()-1);
 
 	// set move target position that will be used to interpolate in Tick()
-	CurrentMoveTargetPosition = AdjacentEmptyTiles[RandomIndex]->GetActorLocation();
+	CurrentMoveTargetPosition = AdjacentEmptyTiles[RandomIndex].WordLocation;
 	CurrentMoveTargetPosition.Z = GetActorLocation().Z;
 
-	// apply the move 
-	CurrentTile = AdjacentEmptyTiles[RandomIndex];
-	CurrentTile->MammalRef = this;
-	CurrentTile->SetTileEmpty(false);
+	// apply the move
+	CurrentTile.WordLocation = AdjacentEmptyTiles[RandomIndex].WordLocation;
+	CurrentTile.Pos2D = AdjacentEmptyTiles[RandomIndex].Pos2D;
+	CurrentTilePos = CurrentTile.Pos2D;
+	
+	MapGeneratorRef->UpdateTileAt(CurrentTile, CurrentTilePos.X, CurrentTilePos.Y);
 
 	// start the interpolation in Tick()
 	bMoveStarted = true;
 	PrimaryActorTick.bCanEverTick = true;
 }
 
-void ATBMammalBase::StartEat(const ATBTile* TargetTile)
+void ATBMammalBase::StartEat(const FTileInfo& EatTargetTile)
 {
-	if(!TargetTile) return;
+	FTileInfo CurrentTile = FTileInfo(CurrentTilePos, FVector::ZeroVector, false, this);
 
 	// empty current tile
-	CurrentTile->SetTileEmpty(true);
-	CurrentTile->MammalRef = nullptr;
-
+	MapGeneratorRef->ClearTile(CurrentTilePos.X, CurrentTilePos.Y);
+	
+	
 	// set move target position that will be used to interpolate in Tick()
-	CurrentMoveTargetPosition = TargetTile->GetActorLocation();
+	CurrentMoveTargetPosition = EatTargetTile.WordLocation;
 	CurrentMoveTargetPosition.Z = GetActorLocation().Z;
 
+	bEatOnMoveFinished = true;
+	
 	// start the interpolation in Tick()
 	bMoveStarted = true;
 	PrimaryActorTick.bCanEverTick = true;
@@ -157,19 +163,22 @@ void ATBMammalBase::OnMoveFinished(const bool bWasSuccessful)
 	PrimaryActorTick.bCanEverTick = false; 
 
 	// if eat target is valid, we requested a move with eat 
-	if(EatTarget)
+	if(bEatOnMoveFinished)
 	{
+		bEatOnMoveFinished = false;
+		
 		//reset starve counter
 		if(bCanStarve)
 			StarveCounter = 0;
 
-		//call on killed event for the victim
-		EatTarget->MammalRef->OnKilled.Broadcast(EatTarget->MammalRef);
 		
-		//apply the move 
-		CurrentTile = EatTarget;
-		CurrentTile->MammalRef = this;
-		CurrentTile->SetTileEmpty(false);
+		//call on killed event for the victim
+		EatTarget.MammalRef->OnKilled.Broadcast(EatTarget.MammalRef);
+		
+		//apply the move
+		FTileInfo CurrentTile = FTileInfo(EatTarget.Pos2D, EatTarget.WordLocation, false, this);
+		CurrentTilePos = CurrentTile.Pos2D;
+		MapGeneratorRef->UpdateTileAt(CurrentTile, CurrentTilePos.X, CurrentTilePos.Y);
 	}
 	else if(bCanStarve)
 	{

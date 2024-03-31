@@ -49,9 +49,10 @@ void ATBTurnedBasedManager::StartTurnBasedGame()
 
 	// generate the map
 	SquareMapGeneratorRef->GenerateSquareMap();
+
 	
 	InitSpawnMammals();
-
+	
 	OnRoundFinished();
 	
 	// AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]
@@ -65,16 +66,44 @@ void ATBTurnedBasedManager::StartTurnBasedGame()
 }
 
 
+ATBMammalBase* ATBTurnedBasedManager::SpawnMammal(TSubclassOf<ATBMammalBase> MammalClass, FTileInfo TargetTile)
+{
+	if(!MammalClass || !TargetTile.bIsEmptyTile) return nullptr;
+
+	
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	// Spawn the mammal at the tile's location
+	ATBMammalBase* MammalRef = GetWorld()->SpawnActor<ATBMammalBase>(MammalClass, TargetTile.WordLocation, FRotator::ZeroRotator, Params);
+
+	// Calculate mammal bounds and adjust its position to snap it to the tile
+	MammalRef->SetActorLocation(TargetTile.WordLocation + FVector(0,0,SquareMapGeneratorRef->GetTileHalfExtents().Z));
+
+	// update the tile
+	TargetTile.bIsEmptyTile = false;
+	TargetTile.MammalRef = MammalRef;
+	SquareMapGeneratorRef->UpdateTileAt(TargetTile, TargetTile.Pos2D.X, TargetTile.Pos2D.Y);
+
+	// update mammal pos 
+	MammalRef->SetCurrentTilePos(TargetTile.Pos2D);
+	
+	
+	return MammalRef;
+}
+
 void ATBTurnedBasedManager::InitSpawnMammals()
 {
 	//spawn cats
 	for(int i= 0 ; i < NumberOfCatsToSpawn; i++)
 	{
-		if(ATBTile* EmptyTile = SquareMapGeneratorRef->GetRandomEmptyTile())
+		FTileInfo TileResult;
+		if(SquareMapGeneratorRef->GetRandomEmptyTile(TileResult))
 		{
-			ATBMammalBase* SpawnedCat = EmptyTile->SpawnMammal(CatClass);
+			ATBMammalBase* SpawnedCat = SpawnMammal(CatClass, TileResult);
 			SpawnedCat->OnStarved.AddDynamic(this, &ATBTurnedBasedManager::OnStarved);
 			SpawnedCat->OnBred.AddDynamic(this, &ATBTurnedBasedManager::OnBred);
+			SpawnedCat->MapGeneratorRef = SquareMapGeneratorRef;
 			Cats.Add(SpawnedCat);
 		}
 		else
@@ -87,11 +116,13 @@ void ATBTurnedBasedManager::InitSpawnMammals()
 	//spawn mice
 	for(int i= 0 ; i < NumberOfMiceToSpawn; i++)
 	{
-		if(ATBTile* EmptyTile = SquareMapGeneratorRef->GetRandomEmptyTile())
+		FTileInfo TileResult;
+		if(SquareMapGeneratorRef->GetRandomEmptyTile(TileResult))
 		{
-			ATBMammalBase* SpawnedMouse = EmptyTile->SpawnMammal(MouseClass);
+			ATBMammalBase* SpawnedMouse = SpawnMammal(MouseClass, TileResult);
 			SpawnedMouse->OnKilled.AddDynamic(this, &ATBTurnedBasedManager::OnKillRequested);
 			SpawnedMouse->OnBred.AddDynamic(this, &ATBTurnedBasedManager::OnBred);
+			SpawnedMouse->MapGeneratorRef = SquareMapGeneratorRef;
 			Mice.Add(SpawnedMouse);
 		}
 		else
@@ -170,7 +201,11 @@ void ATBTurnedBasedManager::OnKillRequested(ATBMammalBase* KilledMammal)
 	Mice.Remove(KilledMammal);
 	AllMammalsToBreed.Remove(KilledMammal); // remove it from breeding list
 
-	KilledMammal->GetCurrentTile()->ClearTile();
+	//KilledMammal->GetCurrentTile()->ClearTile();
+	FVector2D TilePos = KilledMammal->GetCurrentTilePos();
+	SquareMapGeneratorRef->ClearTile(TilePos.X,TilePos.Y);
+
+	KilledMammal->Destroy();
 }
 
 void ATBTurnedBasedManager::OnStarved(ATBMammalBase* StarvedMammal)
@@ -201,24 +236,35 @@ void ATBTurnedBasedManager::OnRoundFinished()
 
 void ATBTurnedBasedManager::TryBreedMammals()
 {
-	for (int i = 0; i< AllMammalsToBreed.Num(); i++)
+	int i = 0;
+	while(i < AllMammalsToBreed.Num())
+	//for (int i = 0; i< AllMammalsToBreed.Num(); i++)
 	{
 		ATBMammalBase* MammalToBreed = AllMammalsToBreed[i];
-		int SavedBreedCount = MammalToBreed->GetSavedBreedCounter();
-		if(SavedBreedCount <= 0)
+		if(!MammalToBreed)
 		{
-			AllMammalsToBreed[i]->SetSavedBreedCounter(0);
 			AllMammalsToBreed.RemoveAt(i);
 			continue;
 		}
-
-		if(!MammalToBreed->GetCurrentTile())
+		
+		int SavedBreedCount = MammalToBreed->GetSavedBreedCounter();
+		if(SavedBreedCount <= 0)
 		{
+			MammalToBreed->SetSavedBreedCounter(0);
+			AllMammalsToBreed.RemoveAt(i);
 			continue;
 		}
-
+		
+		FTileInfo MammalTile;
+		if(!SquareMapGeneratorRef->GetTileAt(MammalTile, MammalToBreed->GetCurrentTilePos().X, MammalToBreed->GetCurrentTilePos().Y))
+		{
+			MammalToBreed->SetSavedBreedCounter(0);
+			AllMammalsToBreed.RemoveAt(i);
+			continue;
+		}
+		
 		// try find empty tiles to spawn 
-		TArray<ATBTile*> EmptyTiles = MammalToBreed->GetCurrentTile()->GetAllAdjacentEmptyTiles();
+		TArray<FTileInfo> EmptyTiles = SquareMapGeneratorRef->GetAllAdjacentEmptyTiles(MammalTile);
 
 		//if there is empty tile to spawn and still remaining breeds
 		while (EmptyTiles.Num() > 0 && SavedBreedCount > 0)
@@ -227,7 +273,7 @@ void ATBTurnedBasedManager::TryBreedMammals()
 			const int RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, EmptyTiles.Num()-1);
 
 			//spawn the mammal on empty tile
-			ATBMammalBase* SpawnedMammal = EmptyTiles[RandomIndex]->SpawnMammal(MammalToBreed->GetClass());
+			ATBMammalBase* SpawnedMammal = SpawnMammal(MammalToBreed->GetClass(), EmptyTiles[RandomIndex]);
 
 			if(MammalToBreed->GetClass() == MouseClass)
 			{
@@ -241,6 +287,7 @@ void ATBTurnedBasedManager::TryBreedMammals()
 				SpawnedMammal->OnBred.AddDynamic(this, &ATBTurnedBasedManager::OnBred);
 				Cats.Add(SpawnedMammal);
 			}
+			SpawnedMammal->MapGeneratorRef = SquareMapGeneratorRef;
 			
 			// remove the tile that we spawned on
 			EmptyTiles.RemoveAt(RandomIndex);
@@ -251,6 +298,7 @@ void ATBTurnedBasedManager::TryBreedMammals()
 			// update saved breeds on the mammal that bred
 			MammalToBreed->SetSavedBreedCounter(SavedBreedCount);
 		}
+		i++;
 	}
 }
 
@@ -281,9 +329,10 @@ void ATBTurnedBasedManager::TryStarveMammals()
 		
 		// also remove it from breeding list, if possible
 		AllMammalsToBreed.Remove(MammalToStarve);
-		
+
 		// destroy the mammal and clear the tile
-		MammalToStarve->GetCurrentTile()->ClearTile();
+		SquareMapGeneratorRef->ClearTile(MammalToStarve->GetCurrentTilePos().X, MammalToStarve->GetCurrentTilePos().Y);
+		MammalToStarve->Destroy();
 	}
 }
 

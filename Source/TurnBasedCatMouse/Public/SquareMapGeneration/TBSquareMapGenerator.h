@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "TBSquareMapGenerator.generated.h"
 
+enum class EDirectionType : uint8;
 // forward declarations
 class UHierarchicalInstancedStaticMeshComponent;
 class ATBMammalBase;
@@ -16,8 +17,12 @@ struct FTileInfo
 {
 	GENERATED_BODY()
 public:
+	FVector2D Pos2D;
+	FVector WordLocation;
 	bool bIsEmptyTile;
-	TSubclassOf<ATBMammalBase> MammalClass;
+	
+	UPROPERTY()
+	ATBMammalBase* MammalRef;
 };
 
 
@@ -56,6 +61,11 @@ private:
 	TArray<FTileInfo> AllTiles;
 
 	void SpawnBorderWalls();
+public:
+	bool UpdateTileAt(FTileInfo NewTileInfo, int TargetX, int TargetY);
+	bool GetTileAt(FTileInfo& TargetTile, int TargetX, int TargetY);
+
+	bool ClearTile(int TargetX, int TargetY);
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -69,13 +79,28 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Square Map Generation")
 	virtual bool GenerateSquareMap();
+	
+	bool GetRandomEmptyTile(FTileInfo& FoundTile) const;
 
-	UFUNCTION(BlueprintCallable, Category = "Square Map Generation")
-	virtual bool GenerateSquareMap_V2();
+	/**
+	 * @brief Gets the tile in the specified direction from this tile.
+	 * @param TileResult
+	 * @param SourceTile
+	 * @param Direction The direction to check.
+	 * @return If valid, returns the tile in the given direction from this tile, otherwise returns nullptr.
+	 */
+	bool GetTileAtDirection(FTileInfo& TileResult, const FTileInfo& SourceTile, const EDirectionType Direction) const;
 
-	ATBTile* GetRandomEmptyTile() const;
+	// Calls GetTileAtDirection for each direction and returns only empty adjacent tiles.
+	TArray<FTileInfo> GetAllAdjacentEmptyTiles(const FTileInfo& SourceTile) const;
+
+	// Calls GetTileAtDirection for each direction and returns all adjacent tiles.
+	TArray<FTileInfo> GetAllAdjacentTiles(const FTileInfo& SourceTile) const;
 
 	virtual FActorSpawnParameters GetActorSpawnParameters();
 
 	TArray<TArray<ATBTile*>> GetSpawnedTiles2D();
+
+	
+	FVector GetTileHalfExtents() const;
 };

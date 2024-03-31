@@ -4,11 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "SquareMapGeneration/TBSquareMapGenerator.h"
 #include "TBMammalBase.generated.h"
 
 class ATBTile;
 class ATBSquareMapGenerator;
 enum class EDirectionType : uint8;
+
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTurnFinishedSignature, ATBMammalBase*, PlayedMammal, bool, bWasSuccessful);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnKilledSignature, ATBMammalBase*, KilledMammal);
@@ -54,17 +56,22 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Mammals")
 	FLinearColor CurrentTileColor;
 
+public:
+	UPROPERTY()
+	ATBSquareMapGenerator* MapGeneratorRef;
+	
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-public:	
+public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 	
-	void SetCurrentTile(ATBTile* TargetTile);
+	void SetCurrentTilePos(FVector2D TargetPos);
 	
-	ATBTile* GetCurrentTile();
+	FVector2D GetCurrentTilePos();
 
 	void ExecuteTurn();
 
@@ -86,16 +93,16 @@ public:
 	FOnBredSignature OnBred;
 
 private:
-	UPROPERTY()
-	ATBTile* CurrentTile;
-	UPROPERTY()
-	ATBTile* EatTarget;
+
+	FVector2D CurrentTilePos;
+	FTileInfo EatTarget;
 	
 	uint8 StarveCounter;
 	uint8 BreedCounter;
 	uint8 SavedBreedCounter;
-	bool bMoveStarted;
 	FVector CurrentMoveTargetPosition;
+	bool bMoveStarted;
+	bool bEatOnMoveFinished;
 
 private:
 	/* If possible, starts movement logic that moves mammal 1 unit in a random direction (North, South, East, or West).
@@ -106,13 +113,13 @@ private:
 	/* Starts eat logic by moving to target mammal on TargetTile.
 	 * Movement will happen in Tick(). Which calls OnMoveFinished after movement ends.
 	 */ 
-	void StartEat(const ATBTile* TargetTile);
+	void StartEat(const FTileInfo& EatTargetTile);
 
 	
 	void OnMoveFinished(const bool bWasSuccessful);
 
 	// if there are any "EatableMammalClass" within 1 unit return the tile, otherwise nullptr
-	ATBTile* GetRandomEatTarget() const;
+	bool GetRandomEatTarget(FTileInfo& EatTargetTile) const;
 	
 	void TryBreed();
 	void TryStarve();

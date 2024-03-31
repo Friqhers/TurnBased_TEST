@@ -15,7 +15,6 @@ enum class EDirectionType : uint8
 	West
 };
 
-
 class ATBMammalBase;
 class ATBSquareMapGenerator;
 
