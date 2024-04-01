@@ -81,7 +81,7 @@ private:
 	 * @param TargetTile The tile to spawn mammal on.
 	 * @return Returns a pointer to the spawned mammal.
 	 */
-	ATBMammalBase* SpawnMammal(TSubclassOf<ATBMammalBase> MammalClass, FTileInfo TargetTile);
+	ATBMammalBase* SpawnMammal(TSubclassOf<ATBMammalBase> MammalClass, FTileInfo* TargetTile) const;
 	
 	// Spawns cats and mouse at random tiles
 	void InitSpawnMammals();

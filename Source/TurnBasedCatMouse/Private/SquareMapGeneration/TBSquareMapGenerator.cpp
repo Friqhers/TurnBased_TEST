@@ -63,22 +63,21 @@ bool ATBSquareMapGenerator::GenerateSquareMap()
 	// clamp to min 8x8, max 99x99;
 	SquareMapSize = FMath::Clamp(SquareMapSize, 2, 999);
 
-	Tiles2D.Empty();
+	Tiles.Empty();
 
 	
 	// Resize the outer array to match the SquareMapSize
-	Tiles2D.SetNum(SquareMapSize);
+	Tiles.SetNum(SquareMapSize);
 
 	const FVector StartLoc = GetActorLocation();
 	FVector CurrentLoc  = StartLoc;
-
-	FActorSpawnParameters params = GetActorSpawnParameters();
+	
 
 	//spawn tiles
 	for (int y = 0; y < SquareMapSize; y++)
 	{
 		// Resize each inner array to match the SquareMapSize
-		Tiles2D[y].SetNum(SquareMapSize);
+		Tiles[y].SetNum(SquareMapSize);
 
 		CurrentLoc.X = StartLoc.X;
 		
@@ -88,9 +87,15 @@ bool ATBSquareMapGenerator::GenerateSquareMap()
 			Transform.SetLocation(CurrentLoc);
 			InstancedStaticMeshComponent->AddInstance(Transform, true);
 
+			
 			// save the tile 
-			Tiles2D[y][x] = FTileInfo(FVector2D(x,y), CurrentLoc, true, nullptr);
-			AllTiles.Add(Tiles2D[y][x]);
+			//Tiles2D[y][x] = FTileInfo(FVector2D(x,y), CurrentLoc, true, nullptr);
+			
+			
+
+			FTileInfo* Tile = new FTileInfo(FVector2D(x,y), CurrentLoc, true, nullptr);
+			Tiles[y][x] = Tile;
+			AllTiles.Add(Tile);
 			
 			// move right by tile extents
 			CurrentLoc.X += TileHalfExtents.X * 2;
@@ -99,6 +104,7 @@ bool ATBSquareMapGenerator::GenerateSquareMap()
 		// move down by tile extents
 		CurrentLoc.Y -= TileHalfExtents.Y * 2;
 	}
+	// -Y is North, +X is East 
 
 	//spawn walls
 	SpawnBorderWalls();
@@ -121,11 +127,11 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	}
 	
 	// middle position x
-	FVector middleX = bIsEven ? (Tiles2D[0][middleIndex-1].WordLocation + Tiles2D[0][middleIndex].WordLocation)/2 :
-										 Tiles2D[0][middleIndex].WordLocation;
+	FVector middleX = bIsEven ? (Tiles[0][middleIndex-1]->WordLocation + Tiles[0][middleIndex]->WordLocation)/2 :
+										 Tiles[0][middleIndex]->WordLocation;
 	// middle position y
-	FVector middleY = bIsEven ? (Tiles2D[middleIndex-1][0].WordLocation + Tiles2D[middleIndex][0].WordLocation)/2 :
-	 								 Tiles2D[middleIndex][0].WordLocation;
+	FVector middleY = bIsEven ? (Tiles[middleIndex-1][0]->WordLocation + Tiles[middleIndex][0]->WordLocation)/2 :
+	 								 Tiles[middleIndex][0]->WordLocation;
 
 	// combine and set middle position
 	FVector middlePos = middleX;
@@ -176,40 +182,6 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	downWall->SetActorScale3D(oldScaleD);
 }
 
-bool ATBSquareMapGenerator::UpdateTileAt(FTileInfo NewTileInfo, int TargetX, int TargetY)
-{
-	if(TargetX < 0 || TargetY < 0) return false;
-
-	if(TargetX >= Tiles2D.Num() || TargetY >=Tiles2D.Num()) return false;
-
-	Tiles2D[TargetY][TargetX] = NewTileInfo;
-
-	int index1D = (TargetY * SquareMapSize) + TargetX;
-	AllTiles[index1D] = NewTileInfo;
-
-	return true;
-}
-
-bool ATBSquareMapGenerator::GetTileAt(FTileInfo& TargetTile, int TargetX, int TargetY)
-{
-	if(TargetX < 0 || TargetY < 0) return false;
-
-	if(TargetX >= Tiles2D.Num() || TargetY >=Tiles2D.Num()) return false;
-
-	TargetTile = Tiles2D[TargetY][TargetX];
-	return true;
-}
-
-bool ATBSquareMapGenerator::ClearTile(int TargetX, int TargetY)
-{
-	if(TargetX < 0 || TargetY < 0) return false;
-
-	if(TargetX >= Tiles2D.Num() || TargetY >=Tiles2D.Num()) return false;
-
-	Tiles2D[TargetY][TargetX].bIsEmptyTile = true;
-	Tiles2D[TargetY][TargetX].MammalRef = nullptr;
-	return true;
-}
 
 
 FActorSpawnParameters ATBSquareMapGenerator::GetActorSpawnParameters()
@@ -226,6 +198,7 @@ FVector ATBSquareMapGenerator::GetTileHalfExtents() const
 	return TileHalfExtents;
 }
 
+
 // Called every frame
 void ATBSquareMapGenerator::Tick(float DeltaTime)
 {
@@ -239,48 +212,31 @@ FVector ATBSquareMapGenerator::GetSquareMapMiddle()
 }
 
 
-
-bool ATBSquareMapGenerator::GetRandomEmptyTile(FTileInfo& FoundTile) const
+FTileInfo* ATBSquareMapGenerator::GetTileAtDirection(const FTileInfo* SourceTile, const EDirectionType Direction) const
 {
-	if(Tiles2D.Num() <= 0) return false;
-
-	TArray<FTileInfo> UncheckedTiles = AllTiles;
-
-	while (UncheckedTiles.Num() > 0)
-	{
-		int RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, UncheckedTiles.Num()-1);
-		if(UncheckedTiles[RandomIndex].bIsEmptyTile)
-		{
-			FoundTile = UncheckedTiles[RandomIndex];
-			return true;
-		}
-		UncheckedTiles.RemoveAt(RandomIndex);
-	}
-
-	return false;
-}
-
-bool ATBSquareMapGenerator::GetTileAtDirection(FTileInfo& TileResult, const FTileInfo& SourceTile, const EDirectionType Direction) const
-{
-	if(Tiles2D.Num() <= 0) return false;
-	FVector2D Position2D = SourceTile.Pos2D;
+	FTileInfo* TileResult = nullptr;
+	
+	if(Tiles.Num() <= 0) return TileResult;
+	
+	const FVector2D Position2D = SourceTile->Pos2D;
+	
 	
 	if(Direction == EDirectionType::South)
 	{
 		// if south tile is valid
 		if(Position2D.Y - 1 >= 0)
 		{
-			TileResult = Tiles2D[Position2D.Y-1][Position2D.X];
-			return true;
+			TileResult = Tiles[Position2D.Y-1][Position2D.X];
+			return TileResult;
 		}
 	}
 	else if(Direction == EDirectionType::North)
 	{
 		// if north tile is valid
-		if(Position2D.Y + 1 < Tiles2D.Num())
+		if(Position2D.Y + 1 < Tiles.Num())
 		{
-			TileResult = Tiles2D[Position2D.Y+1][Position2D.X];
-			return true;
+			TileResult = Tiles[Position2D.Y+1][Position2D.X];
+			return TileResult;
 		}
 	}
 	else if(Direction == EDirectionType::West)
@@ -288,55 +244,55 @@ bool ATBSquareMapGenerator::GetTileAtDirection(FTileInfo& TileResult, const FTil
 		// if west tile is valid
 		if(Position2D.X - 1 >= 0)
 		{
-			TileResult = Tiles2D[Position2D.Y][Position2D.X - 1];
-			return true;
+			TileResult = Tiles[Position2D.Y][Position2D.X - 1];
+			return TileResult;
 		}
 			
 	}
 	else if(Direction == EDirectionType::East)
 	{
 		// if east tile is valid
-		if(Position2D.X + 1 < Tiles2D.Num())
+		if(Position2D.X + 1 < Tiles.Num())
 		{
-			TileResult = Tiles2D[Position2D.Y][Position2D.X + 1];
-			return true;
+			TileResult = Tiles[Position2D.Y][Position2D.X + 1];
+			return TileResult;
 		}
 	}
 
-	return false;
+	return TileResult;
 }
 
-TArray<FTileInfo> ATBSquareMapGenerator::GetAllAdjacentEmptyTiles(const FTileInfo& SourceTile) const
+TArray<FTileInfo*> ATBSquareMapGenerator::GetAllAdjacentEmptyTiles(const FTileInfo* SourceTile) const
 {
-	TArray<FTileInfo> AdjacentEmptyTiles;
+	TArray<FTileInfo*> AdjacentEmptyTiles;
 	
-	if(Tiles2D.Num() <= 0) return AdjacentEmptyTiles;
+	if(Tiles.Num() <= 0) return AdjacentEmptyTiles;
 	
-	FTileInfo TileResult;
-	if(GetTileAtDirection(TileResult, SourceTile, EDirectionType::North))
+	
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::North))
 	{
-		if(TileResult.bIsEmptyTile)
+		if(TileResult->bIsEmptyTile)
 		{
 			AdjacentEmptyTiles.Add(TileResult);
 		}
 	}
-	if(GetTileAtDirection(TileResult, SourceTile, EDirectionType::South))
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::South))
 	{
-		if(TileResult.bIsEmptyTile)
+		if(TileResult->bIsEmptyTile)
 		{
 			AdjacentEmptyTiles.Add(TileResult);
 		}
 	}
-	if(GetTileAtDirection(TileResult, SourceTile, EDirectionType::West))
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::West))
 	{
-		if(TileResult.bIsEmptyTile)
+		if(TileResult->bIsEmptyTile)
 		{
 			AdjacentEmptyTiles.Add(TileResult);
 		}
 	}
-	if(GetTileAtDirection(TileResult, SourceTile, EDirectionType::East))
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::East))
 	{
-		if(TileResult.bIsEmptyTile)
+		if(TileResult->bIsEmptyTile)
 		{
 			AdjacentEmptyTiles.Add(TileResult);
 		}
@@ -345,26 +301,26 @@ TArray<FTileInfo> ATBSquareMapGenerator::GetAllAdjacentEmptyTiles(const FTileInf
 	return AdjacentEmptyTiles;
 }
 
-TArray<FTileInfo> ATBSquareMapGenerator::GetAllAdjacentTiles(const FTileInfo& SourceTile) const
+TArray<FTileInfo*> ATBSquareMapGenerator::GetAllAdjacentTiles(const FTileInfo* SourceTile) const
 {
-	TArray<FTileInfo> AdjacentEmptyTiles;
+	TArray<FTileInfo*> AdjacentEmptyTiles;
 	
-	if(Tiles2D.Num() <= 0) return AdjacentEmptyTiles;
+	if(Tiles.Num() <= 0) return AdjacentEmptyTiles;
 	
-	FTileInfo TileResult;
-	if(GetTileAtDirection(TileResult, SourceTile, EDirectionType::North))
+	
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::North))
 	{
 		AdjacentEmptyTiles.Add(TileResult);
 	}
-	if(GetTileAtDirection(TileResult, SourceTile, EDirectionType::South))
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::South))
 	{
 		AdjacentEmptyTiles.Add(TileResult);
 	}
-	if(GetTileAtDirection(TileResult, SourceTile, EDirectionType::West))
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::West))
 	{
 		AdjacentEmptyTiles.Add(TileResult);
 	}
-	if(GetTileAtDirection(TileResult, SourceTile, EDirectionType::East))
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::East))
 	{
 		AdjacentEmptyTiles.Add(TileResult);
 	}
@@ -372,3 +328,23 @@ TArray<FTileInfo> ATBSquareMapGenerator::GetAllAdjacentTiles(const FTileInfo& So
 	return AdjacentEmptyTiles;
 }
 
+FTileInfo* ATBSquareMapGenerator::GetRandomEmptyTile() const
+{
+	FTileInfo* FoundTile = nullptr;
+	if(AllTiles.Num() <= 0) return nullptr;
+
+	TArray<FTileInfo*> UncheckedTiles = AllTiles;
+
+	while (UncheckedTiles.Num() > 0)
+	{
+		const int RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, UncheckedTiles.Num()-1);
+		if(UncheckedTiles[RandomIndex]->bIsEmptyTile)
+		{
+			FoundTile = UncheckedTiles[RandomIndex];
+			return FoundTile;
+		}
+		UncheckedTiles.RemoveAt(RandomIndex);
+	}
+
+	return nullptr;
+}

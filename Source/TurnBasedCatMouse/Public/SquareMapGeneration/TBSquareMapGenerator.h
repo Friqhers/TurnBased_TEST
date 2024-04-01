@@ -49,22 +49,24 @@ public:
 	TSubclassOf<AActor> WallClass;
 
 	// Generated map will be SquareMapSizexSquareMapSize
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Square Map Generation")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Square Map Generation")
 	int SquareMapSize;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Square Map Generation")
+	bool ShowDebug;
 	
 private:
 	FVector TileHalfExtents;
 	FVector SquareMapMiddle;
 
-	TArray<TArray<FTileInfo>> Tiles2D;
-	TArray<FTileInfo> AllTiles;
+	// 2d array of all the tiles
+	TArray<TArray<FTileInfo*>> Tiles;
 
+	// holding all the tiles as 1d array
+	TArray<FTileInfo*> AllTiles;
+
+	// Spawns border walls. WallClass must be valid
 	void SpawnBorderWalls();
-public:
-	bool UpdateTileAt(FTileInfo NewTileInfo, int TargetX, int TargetY);
-	bool GetTileAt(FTileInfo& TargetTile, int TargetX, int TargetY);
-
-	bool ClearTile(int TargetX, int TargetY);
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -79,26 +81,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Square Map Generation")
 	virtual bool GenerateSquareMap();
 	
-	bool GetRandomEmptyTile(FTileInfo& FoundTile) const;
-
-	/**
-	 * @brief Gets the tile in the specified direction from this tile.
-	 * @param TileResult
-	 * @param SourceTile
-	 * @param Direction The direction to check.
-	 * @return If valid, returns the tile in the given direction from this tile, otherwise returns nullptr.
-	 */
-	bool GetTileAtDirection(FTileInfo& TileResult, const FTileInfo& SourceTile, const EDirectionType Direction) const;
-
-	// Calls GetTileAtDirection for each direction and returns only empty adjacent tiles.
-	TArray<FTileInfo> GetAllAdjacentEmptyTiles(const FTileInfo& SourceTile) const;
-
-	// Calls GetTileAtDirection for each direction and returns all adjacent tiles.
-	TArray<FTileInfo> GetAllAdjacentTiles(const FTileInfo& SourceTile) const;
-
 	virtual FActorSpawnParameters GetActorSpawnParameters();
 	
-
-	
 	FVector GetTileHalfExtents() const;
+
+	/**
+	 * @brief Gets the tile in the specified direction from the given SourceTile tile.
+	 * @param SourceTile The tile to check the direction from.
+	 * @param Direction The direction to check.
+	 * @return If valid, returns the tile in the given direction from the SourceTile, otherwise returns nullptr.
+	 */
+	FTileInfo* GetTileAtDirection(const FTileInfo* SourceTile, const EDirectionType Direction) const;
+
+	// Calls GetTileAtDirection for each direction and returns only empty adjacent tiles.
+	TArray<FTileInfo*> GetAllAdjacentEmptyTiles(const FTileInfo* SourceTile) const;
+
+	// Calls GetTileAtDirection for each direction and returns all adjacent tiles.
+	TArray<FTileInfo*> GetAllAdjacentTiles(const FTileInfo* SourceTile) const;
+	
+	FTileInfo* GetRandomEmptyTile() const;
 };

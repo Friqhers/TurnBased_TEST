@@ -56,7 +56,7 @@ public:
 	FLinearColor CurrentTileColor;
 
 public:
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly)
 	ATBSquareMapGenerator* MapGeneratorRef;
 	
 
@@ -68,9 +68,9 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 	
-	void SetCurrentTilePos(FVector2D TargetPos);
+	void SetCurrentTile(FTileInfo* TargetTile);
 	
-	FVector2D GetCurrentTilePos();
+	FTileInfo* GetCurrentTile();
 
 	void ExecuteTurn();
 
@@ -91,21 +91,23 @@ public:
 	FOnTurnFinishedSignature OnTurnFinished;
 	FOnBredSignature OnBred;
 
+	UFUNCTION(BlueprintImplementableEvent)
+	void UpdateDebugWidget(bool bShowDebug);
+
 private:
 
-	// Current X,Y tile position of the mammal
-	FVector2D CurrentTilePos;
-
+	// Current tile of the mammal
+	FTileInfo* CurrentTile;
+	
 	// Eat target for this round
-	FTileInfo EatTarget;
+	FTileInfo* EatTarget;
 	
 	uint8 StarveCounter;
 	uint8 BreedCounter;
 	uint8 SavedBreedCounter;
 	FVector CurrentMoveTargetPosition;
 	bool bMoveStarted;
-	bool bEatOnMoveFinished;
-
+	
 private:
 	/* If possible, starts movement logic that moves mammal 1 unit in a random direction (North, South, East, or West).
 	 * Movement will happen in Tick(). Which calls OnMoveFinished after movement ends.
@@ -117,13 +119,13 @@ private:
 	 * Movement will happen in Tick(). Which calls OnMoveFinished after movement ends.
 	 * @param EatTargetTile Target tile to eat
 	 */
-	void StartEat(const FTileInfo& EatTargetTile);
+	void StartEat(const FTileInfo* EatTargetTile);
 
 	
 	void OnMoveFinished(const bool bWasSuccessful);
 
 	// if there are any "EatableMammalClass" within 1 unit return the tile, otherwise nullptr
-	bool GetRandomEatTarget(FTileInfo& EatTargetTile) const;
+	FTileInfo* GetRandomEatTarget() const;
 	
 	void TryBreed();
 	void TryStarve();
