@@ -3,7 +3,6 @@
 
 #include "Mammals/TBMammalBase.h"
 #include "Kismet/KismetMathLibrary.h"
-#include "SquareMapGeneration/TBTile.h"
 
 // Sets default values
 ATBMammalBase::ATBMammalBase()

@@ -6,11 +6,17 @@
 #include "GameFramework/Actor.h"
 #include "TBSquareMapGenerator.generated.h"
 
-enum class EDirectionType : uint8;
+enum class EDirectionType : uint8
+{
+	North,
+	South,
+	East,
+	West
+};
+
 // forward declarations
 class UHierarchicalInstancedStaticMeshComponent;
 class ATBMammalBase;
-class ATBTile;
 
 USTRUCT()
 struct FTileInfo
@@ -38,22 +44,15 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Squara Map Generation")
 	UHierarchicalInstancedStaticMeshComponent* InstancedStaticMeshComponent;
 	
-
-	// Tile class to spawn
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Square Map Generation")
-	TSubclassOf<ATBTile> TileClass;
-
 	// Wall class to spawn (it should be the same size as TileClass)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Square Map Generation")
-	TSubclassOf<ATBTile> WallClass;
+	TSubclassOf<AActor> WallClass;
 
 	// Generated map will be SquareMapSizexSquareMapSize
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Square Map Generation")
 	int SquareMapSize;
 	
 private:
-	TArray<TArray<ATBTile*>> SpawnedTiles2D;
-	TArray<ATBTile*> AllSpawnedTiles;
 	FVector TileHalfExtents;
 	FVector SquareMapMiddle;
 
@@ -98,8 +97,7 @@ public:
 	TArray<FTileInfo> GetAllAdjacentTiles(const FTileInfo& SourceTile) const;
 
 	virtual FActorSpawnParameters GetActorSpawnParameters();
-
-	TArray<TArray<ATBTile*>> GetSpawnedTiles2D();
+	
 
 	
 	FVector GetTileHalfExtents() const;

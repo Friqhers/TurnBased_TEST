@@ -6,7 +6,6 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
-#include "SquareMapGeneration/TBTile.h"
 
 // Sets default values
 ATBSquareMapGenerator::ATBSquareMapGenerator()
@@ -37,7 +36,11 @@ void ATBSquareMapGenerator::BeginPlay()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("ATBSquareMapGenerator::BeginPlay -> Couldn't spawned tile class named %s"), *TileClass->GetName());
+		UE_LOG(LogTemp, Error, TEXT("ATBSquareMapGenerator::BeginPlay -> Please set the static mesh for InstancedStaticMeshComponent!"));
+		UKismetSystemLibrary::QuitGame(this,
+			UGameplayStatics::GetPlayerController(this,0),
+			EQuitPreference::Quit,
+			false);
 	}
 
 	
@@ -103,60 +106,6 @@ bool ATBSquareMapGenerator::GenerateSquareMap()
 	return true;
 }
 
-// bool ATBSquareMapGenerator::GenerateSquareMap()
-// {
-// 	if(!TileClass || !WallClass) return false;
-// 	
-// 	// clamp to min 8x8, max 99x99;
-// 	SquareMapSize = FMath::Clamp(SquareMapSize, 2, 99);
-//
-// 	SpawnedTiles2D.Empty();
-// 	
-// 	// Resize the outer array to match the SquareMapSize
-// 	SpawnedTiles2D.SetNum(SquareMapSize);
-//
-// 	FVector StartLoc = GetActorLocation();
-// 	FVector CurrentLoc  = StartLoc;
-//
-// 	FActorSpawnParameters params = GetActorSpawnParameters();
-//
-// 	//spawn tiles
-// 	for (int y = 0; y < SquareMapSize; y++)
-// 	{
-// 		// Resize each inner array to match the SquareMapSize
-// 		SpawnedTiles2D[y].SetNum(SquareMapSize);
-//
-// 		CurrentLoc.X = StartLoc.X;
-// 		
-// 		for(int x = 0; x < SquareMapSize; x++)
-// 		{
-// 			//Spawn the tile at current location
-// 			ATBTile* Tile = GetWorld()->SpawnActor<ATBTile>(TileClass, CurrentLoc, FRotator::ZeroRotator, params);
-// 			Tile->SetPosition2D(FVector2D(x,y));
-// 			Tile->SquareMapGeneratorRef = this;
-// 			
-// 			// save the tile 
-// 			SpawnedTiles2D[y][x] = Tile;
-// 			AllSpawnedTiles.Add(Tile);
-// 			
-// 			// move right by tile extents
-// 			CurrentLoc.X += TileHalfExtents.X * 2;
-//
-// 			
-// 		}
-//
-// 		// move down by tile extents
-// 		CurrentLoc.Y -= TileHalfExtents.Y * 2;
-// 	}
-//
-// 	// spawn walls
-// 	SpawnBorderWalls();
-//
-// 	// spawn mammals (3 cats and 50 mice)
-// 	
-// 	return true;
-// }
-
 
 void ATBSquareMapGenerator::SpawnBorderWalls()
 {
@@ -166,11 +115,11 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	const float ScaleMultiplierY = totalHalfExtents.Y / TileHalfExtents.Y;
 	const float ScaleMultiplierX = totalHalfExtents.X / TileHalfExtents.X;
 	
-	if(middleIndex-1 < 0)
+	if(middleIndex-1 < 0 || !WallClass)
 	{
-		//@TODO: abort generating map
 		return;
 	}
+	
 	// middle position x
 	FVector middleX = bIsEven ? (Tiles2D[0][middleIndex-1].WordLocation + Tiles2D[0][middleIndex].WordLocation)/2 :
 										 Tiles2D[0][middleIndex].WordLocation;
@@ -197,7 +146,7 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	//spawn left wall
 	FVector leftWallPos = middlePos;
 	leftWallPos.X -= MoveDeltaX;
-	ATBTile* leftWall = GetWorld()->SpawnActor<ATBTile>(WallClass, leftWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
+	AActor* leftWall = GetWorld()->SpawnActor<AActor>(WallClass, leftWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
 	FVector oldScaleL = leftWall->GetActorScale3D();
 	oldScaleL.Y *= ScaleMultiplierY;
 	leftWall->SetActorScale3D(oldScaleL);
@@ -205,7 +154,7 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	//spawn right wall
 	FVector rightWallPos = middlePos;
 	rightWallPos.X += MoveDeltaX;
-	ATBTile* rightWall = GetWorld()->SpawnActor<ATBTile>(WallClass, rightWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
+	AActor* rightWall = GetWorld()->SpawnActor<AActor>(WallClass, rightWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
 	FVector oldScaleR = rightWall->GetActorScale3D();
 	oldScaleR.Y *= ScaleMultiplierY;
 	rightWall->SetActorScale3D(oldScaleR);
@@ -213,7 +162,7 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	//spawn up wall
 	FVector upWallPos = middlePos;
 	upWallPos.Y += MoveDeltaY;
-	ATBTile* upWall = GetWorld()->SpawnActor<ATBTile>(WallClass, upWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
+	AActor* upWall = GetWorld()->SpawnActor<AActor>(WallClass, upWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
 	FVector oldScaleU = upWall->GetActorScale3D();
 	oldScaleU.X *= ScaleMultiplierX;
 	upWall->SetActorScale3D(oldScaleU);
@@ -221,7 +170,7 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	//spawn down wall
 	FVector downWallPos = middlePos;
 	downWallPos.Y -= MoveDeltaY;
-	ATBTile* downWall = GetWorld()->SpawnActor<ATBTile>(WallClass, downWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
+	AActor* downWall = GetWorld()->SpawnActor<AActor>(WallClass, downWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
 	FVector oldScaleD = downWall->GetActorScale3D();
 	oldScaleD.X *= ScaleMultiplierX;
 	downWall->SetActorScale3D(oldScaleD);
@@ -270,11 +219,6 @@ FActorSpawnParameters ATBSquareMapGenerator::GetActorSpawnParameters()
 	Parameters.Owner = this;
 
 	return Parameters;
-}
-
-TArray<TArray<ATBTile*>> ATBSquareMapGenerator::GetSpawnedTiles2D()
-{
-	return SpawnedTiles2D;
 }
 
 FVector ATBSquareMapGenerator::GetTileHalfExtents() const

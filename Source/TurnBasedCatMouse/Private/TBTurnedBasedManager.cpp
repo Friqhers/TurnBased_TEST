@@ -3,7 +3,6 @@
 
 #include "TBTurnedBasedManager.h"
 #include "SquareMapGeneration/TBSquareMapGenerator.h"
-#include "SquareMapGeneration/TBTile.h"
 #include "Mammals/TBMammalBase.h"
 #include "Async/Async.h"
 #include "Kismet/KismetMathLibrary.h"
@@ -238,7 +237,6 @@ void ATBTurnedBasedManager::TryBreedMammals()
 {
 	int i = 0;
 	while(i < AllMammalsToBreed.Num())
-	//for (int i = 0; i< AllMammalsToBreed.Num(); i++)
 	{
 		ATBMammalBase* MammalToBreed = AllMammalsToBreed[i];
 		if(!MammalToBreed)

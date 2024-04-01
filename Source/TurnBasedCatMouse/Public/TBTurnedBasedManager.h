@@ -7,7 +7,6 @@
 #include "TBTurnedBasedManager.generated.h"
 
 struct FTileInfo;
-class ATBTile;
 class ATBMammalBase;
 class ATBSquareMapGenerator;
 
@@ -77,11 +76,10 @@ private:
 
 private:
 	/**
-	 * @brief Spawns a mammal on this tile and sets references accordingly.
+	 * @brief Spawns a mammal on the given tile and sets references accordingly.
 	 * @param MammalClass The class of the mammal to spawn.
 	 * @param TargetTile The tile to spawn mammal on.
 	 * @return Returns a pointer to the spawned mammal.
-	 * @remarks Sets @MammalRef to point to the spawned mammal and updates @bIsEmptyTile (a boolean indicating whether the tile is currently empty) accordingly.
 	 */
 	ATBMammalBase* SpawnMammal(TSubclassOf<ATBMammalBase> MammalClass, FTileInfo TargetTile);
 	

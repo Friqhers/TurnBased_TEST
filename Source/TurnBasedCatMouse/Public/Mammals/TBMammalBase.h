@@ -7,7 +7,6 @@
 #include "SquareMapGeneration/TBSquareMapGenerator.h"
 #include "TBMammalBase.generated.h"
 
-class ATBTile;
 class ATBSquareMapGenerator;
 enum class EDirectionType : uint8;
 
@@ -94,7 +93,10 @@ public:
 
 private:
 
+	// Current X,Y tile position of the mammal
 	FVector2D CurrentTilePos;
+
+	// Eat target for this round
 	FTileInfo EatTarget;
 	
 	uint8 StarveCounter;
@@ -109,10 +111,12 @@ private:
 	 * Movement will happen in Tick(). Which calls OnMoveFinished after movement ends.
 	 */
 	void StartRandomMove();
-
-	/* Starts eat logic by moving to target mammal on TargetTile.
+	
+	/**
+	 * @brief Starts eat logic by moving to target mammal on TargetTile.
 	 * Movement will happen in Tick(). Which calls OnMoveFinished after movement ends.
-	 */ 
+	 * @param EatTargetTile Target tile to eat
+	 */
 	void StartEat(const FTileInfo& EatTargetTile);
 
 	
