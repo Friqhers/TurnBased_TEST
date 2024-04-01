@@ -142,13 +142,13 @@ void ATBTurnedBasedManager::StartNextRound()
 	
 	if(Cats.Num() <= 0)
 	{
-		//@TODO: cat lose
+		OnCatsWin();
 		return;
 	}
 
 	if(Mice.Num() <= 0)
 	{
-		//@TODO: mouse lose
+		OnMiceWin();
 		return;
 	}
 	

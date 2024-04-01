@@ -129,5 +129,4 @@ private:
 	
 	void TryBreed();
 	void TryStarve();
-	
 };
