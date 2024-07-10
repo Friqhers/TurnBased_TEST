@@ -2,13 +2,10 @@
 
 
 #include "SquareMapGeneration/TBSquareMapGenerator.h"
-
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
-#include "Mammals/TBMammalBase.h"
-#include "SquareMapGeneration/TBTile.h"
 
 // Sets default values
 ATBSquareMapGenerator::ATBSquareMapGenerator()
@@ -31,25 +28,19 @@ void ATBSquareMapGenerator::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if(!TileClass)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATBSquareMapGenerator::BeginPlay -> Tile class is not valid. Please set it and then restart the game!"));
-		// maybe exit the game here
-		return;
-	}
-
 	
-
-	// get tile size by spawning tile actor and then destroy it
-	if(ATBTile* Tile = GetWorld()->SpawnActor<ATBTile>(TileClass, GetActorLocation(), GetActorRotation(), GetActorSpawnParameters()))
+	// get tile extents
+	if(const UStaticMesh* StaticMesh = InstancedStaticMeshComponent->GetStaticMesh())
 	{
-		FVector Origin;
-		Tile->GetActorBounds(false, Origin, TileHalfExtents, true);
-		Tile->Destroy();
+		TileHalfExtents = StaticMesh->GetBoundingBox().GetExtent();
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("ATBSquareMapGenerator::BeginPlay -> Couldn't spawned tile class named %s"), *TileClass->GetName());
+		UE_LOG(LogTemp, Error, TEXT("ATBSquareMapGenerator::BeginPlay -> Please set the static mesh for InstancedStaticMeshComponent!"));
+		UKismetSystemLibrary::QuitGame(this,
+			UGameplayStatics::GetPlayerController(this,0),
+			EQuitPreference::Quit,
+			false);
 	}
 
 	
@@ -65,32 +56,28 @@ void ATBSquareMapGenerator::BeginPlay()
 	
 }
 
-bool ATBSquareMapGenerator::GenerateSquareMap_V2()
+bool ATBSquareMapGenerator::GenerateSquareMap()
 {
 	if(!InstancedStaticMeshComponent->GetStaticMesh()) return false;
-
-	const float halfExtentsX = InstancedStaticMeshComponent->GetStaticMesh()->GetBoundingBox().GetExtent().X;
-	const float halfExtentsY = InstancedStaticMeshComponent->GetStaticMesh()->GetBoundingBox().GetExtent().Y;
-
+	
 	// clamp to min 8x8, max 99x99;
-	SquareMapSize = FMath::Clamp(SquareMapSize, 2, 99);
+	SquareMapSize = FMath::Clamp(SquareMapSize, 2, 999);
 
-	Tiles2D.Empty();
+	Tiles.Empty();
 
 	
 	// Resize the outer array to match the SquareMapSize
-	Tiles2D.SetNum(SquareMapSize);
+	Tiles.SetNum(SquareMapSize);
 
-	FVector StartLoc = GetActorLocation();
+	const FVector StartLoc = GetActorLocation();
 	FVector CurrentLoc  = StartLoc;
-
-	FActorSpawnParameters params = GetActorSpawnParameters();
+	
 
 	//spawn tiles
 	for (int y = 0; y < SquareMapSize; y++)
 	{
 		// Resize each inner array to match the SquareMapSize
-		Tiles2D[y].SetNum(SquareMapSize);
+		Tiles[y].SetNum(SquareMapSize);
 
 		CurrentLoc.X = StartLoc.X;
 		
@@ -100,17 +87,24 @@ bool ATBSquareMapGenerator::GenerateSquareMap_V2()
 			Transform.SetLocation(CurrentLoc);
 			InstancedStaticMeshComponent->AddInstance(Transform, true);
 
+			
 			// save the tile 
-			Tiles2D[y][x] = FTileInfo(true, nullptr);
-			AllTiles.Add(FTileInfo(true, nullptr));
+			//Tiles2D[y][x] = FTileInfo(FVector2D(x,y), CurrentLoc, true, nullptr);
+			
+			
+
+			FTileInfo* Tile = new FTileInfo(FVector2D(x,y), CurrentLoc, true, nullptr);
+			Tiles[y][x] = Tile;
+			AllTiles.Add(Tile);
 			
 			// move right by tile extents
-			CurrentLoc.X += halfExtentsX * 2;
+			CurrentLoc.X += TileHalfExtents.X * 2;
 		}
 
 		// move down by tile extents
-		CurrentLoc.Y -= halfExtentsY * 2;
+		CurrentLoc.Y -= TileHalfExtents.Y * 2;
 	}
+	// -Y is North, +X is East 
 
 	//spawn walls
 	SpawnBorderWalls();
@@ -118,79 +112,6 @@ bool ATBSquareMapGenerator::GenerateSquareMap_V2()
 	return true;
 }
 
-bool ATBSquareMapGenerator::GenerateSquareMap()
-{
-	if(!TileClass || !WallClass) return false;
-	
-	// clamp to min 8x8, max 99x99;
-	SquareMapSize = FMath::Clamp(SquareMapSize, 2, 99);
-
-	SpawnedTiles2D.Empty();
-	
-	// Resize the outer array to match the SquareMapSize
-	SpawnedTiles2D.SetNum(SquareMapSize);
-
-	FVector StartLoc = GetActorLocation();
-	FVector CurrentLoc  = StartLoc;
-
-	FActorSpawnParameters params = GetActorSpawnParameters();
-
-	//spawn tiles
-	for (int y = 0; y < SquareMapSize; y++)
-	{
-		// Resize each inner array to match the SquareMapSize
-		SpawnedTiles2D[y].SetNum(SquareMapSize);
-
-		CurrentLoc.X = StartLoc.X;
-		
-		for(int x = 0; x < SquareMapSize; x++)
-		{
-			//Spawn the tile at current location
-			ATBTile* Tile = GetWorld()->SpawnActor<ATBTile>(TileClass, CurrentLoc, FRotator::ZeroRotator, params);
-			Tile->SetPosition2D(FVector2D(x,y));
-			Tile->SquareMapGeneratorRef = this;
-			
-			// save the tile 
-			SpawnedTiles2D[y][x] = Tile;
-			AllSpawnedTiles.Add(Tile);
-			
-			// move right by tile extents
-			CurrentLoc.X += TileHalfExtents.X * 2;
-
-			
-		}
-
-		// move down by tile extents
-		CurrentLoc.Y -= TileHalfExtents.Y * 2;
-	}
-
-	// spawn walls
-	SpawnBorderWalls();
-
-	// spawn mammals (3 cats and 50 mice)
-	
-	return true;
-}
-
-ATBTile* ATBSquareMapGenerator::GetRandomEmptyTile() const
-{
-	if(SpawnedTiles2D.Num() <= 0) return nullptr;
-
-	TArray<ATBTile*> UncheckedTiles = AllSpawnedTiles;
-
-	while (UncheckedTiles.Num() > 0)
-	{
-		int RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, UncheckedTiles.Num()-1);
-		if(UncheckedTiles[RandomIndex]->IsTileEmpty())
-		{
-			return UncheckedTiles[RandomIndex];
-		}
-
-		UncheckedTiles.RemoveAt(RandomIndex);
-	}
-
-	return nullptr;
-}
 
 void ATBSquareMapGenerator::SpawnBorderWalls()
 {
@@ -200,17 +121,17 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	const float ScaleMultiplierY = totalHalfExtents.Y / TileHalfExtents.Y;
 	const float ScaleMultiplierX = totalHalfExtents.X / TileHalfExtents.X;
 	
-	if(middleIndex-1 < 0)
+	if(middleIndex-1 < 0 || !WallClass)
 	{
-		//@TODO: abort generating map
 		return;
 	}
+	
 	// middle position x
-	FVector middleX = bIsEven ? (SpawnedTiles2D[0][middleIndex-1]->GetActorLocation() + SpawnedTiles2D[0][middleIndex]->GetActorLocation())/2 :
-										 SpawnedTiles2D[0][middleIndex]->GetActorLocation();
+	FVector middleX = bIsEven ? (Tiles[0][middleIndex-1]->WordLocation + Tiles[0][middleIndex]->WordLocation)/2 :
+										 Tiles[0][middleIndex]->WordLocation;
 	// middle position y
-	FVector middleY = bIsEven ? (SpawnedTiles2D[middleIndex-1][0]->GetActorLocation() + SpawnedTiles2D[middleIndex][0]->GetActorLocation())/2 :
-	 								 SpawnedTiles2D[middleIndex][0]->GetActorLocation();
+	FVector middleY = bIsEven ? (Tiles[middleIndex-1][0]->WordLocation + Tiles[middleIndex][0]->WordLocation)/2 :
+	 								 Tiles[middleIndex][0]->WordLocation;
 
 	// combine and set middle position
 	FVector middlePos = middleX;
@@ -231,7 +152,7 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	//spawn left wall
 	FVector leftWallPos = middlePos;
 	leftWallPos.X -= MoveDeltaX;
-	ATBTile* leftWall = GetWorld()->SpawnActor<ATBTile>(WallClass, leftWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
+	AActor* leftWall = GetWorld()->SpawnActor<AActor>(WallClass, leftWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
 	FVector oldScaleL = leftWall->GetActorScale3D();
 	oldScaleL.Y *= ScaleMultiplierY;
 	leftWall->SetActorScale3D(oldScaleL);
@@ -239,7 +160,7 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	//spawn right wall
 	FVector rightWallPos = middlePos;
 	rightWallPos.X += MoveDeltaX;
-	ATBTile* rightWall = GetWorld()->SpawnActor<ATBTile>(WallClass, rightWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
+	AActor* rightWall = GetWorld()->SpawnActor<AActor>(WallClass, rightWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
 	FVector oldScaleR = rightWall->GetActorScale3D();
 	oldScaleR.Y *= ScaleMultiplierY;
 	rightWall->SetActorScale3D(oldScaleR);
@@ -247,7 +168,7 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	//spawn up wall
 	FVector upWallPos = middlePos;
 	upWallPos.Y += MoveDeltaY;
-	ATBTile* upWall = GetWorld()->SpawnActor<ATBTile>(WallClass, upWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
+	AActor* upWall = GetWorld()->SpawnActor<AActor>(WallClass, upWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
 	FVector oldScaleU = upWall->GetActorScale3D();
 	oldScaleU.X *= ScaleMultiplierX;
 	upWall->SetActorScale3D(oldScaleU);
@@ -255,11 +176,12 @@ void ATBSquareMapGenerator::SpawnBorderWalls()
 	//spawn down wall
 	FVector downWallPos = middlePos;
 	downWallPos.Y -= MoveDeltaY;
-	ATBTile* downWall = GetWorld()->SpawnActor<ATBTile>(WallClass, downWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
+	AActor* downWall = GetWorld()->SpawnActor<AActor>(WallClass, downWallPos, FRotator::ZeroRotator, GetActorSpawnParameters());
 	FVector oldScaleD = downWall->GetActorScale3D();
 	oldScaleD.X *= ScaleMultiplierX;
 	downWall->SetActorScale3D(oldScaleD);
 }
+
 
 
 FActorSpawnParameters ATBSquareMapGenerator::GetActorSpawnParameters()
@@ -271,10 +193,11 @@ FActorSpawnParameters ATBSquareMapGenerator::GetActorSpawnParameters()
 	return Parameters;
 }
 
-TArray<TArray<ATBTile*>> ATBSquareMapGenerator::GetSpawnedTiles2D()
+FVector ATBSquareMapGenerator::GetTileHalfExtents() const
 {
-	return SpawnedTiles2D;
+	return TileHalfExtents;
 }
+
 
 // Called every frame
 void ATBSquareMapGenerator::Tick(float DeltaTime)
@@ -288,3 +211,140 @@ FVector ATBSquareMapGenerator::GetSquareMapMiddle()
 	return SquareMapMiddle;
 }
 
+
+FTileInfo* ATBSquareMapGenerator::GetTileAtDirection(const FTileInfo* SourceTile, const EDirectionType Direction) const
+{
+	FTileInfo* TileResult = nullptr;
+	
+	if(Tiles.Num() <= 0) return TileResult;
+	
+	const FVector2D Position2D = SourceTile->Pos2D;
+	
+	
+	if(Direction == EDirectionType::South)
+	{
+		// if south tile is valid
+		if(Position2D.Y - 1 >= 0)
+		{
+			TileResult = Tiles[Position2D.Y-1][Position2D.X];
+			return TileResult;
+		}
+	}
+	else if(Direction == EDirectionType::North)
+	{
+		// if north tile is valid
+		if(Position2D.Y + 1 < Tiles.Num())
+		{
+			TileResult = Tiles[Position2D.Y+1][Position2D.X];
+			return TileResult;
+		}
+	}
+	else if(Direction == EDirectionType::West)
+	{
+		// if west tile is valid
+		if(Position2D.X - 1 >= 0)
+		{
+			TileResult = Tiles[Position2D.Y][Position2D.X - 1];
+			return TileResult;
+		}
+			
+	}
+	else if(Direction == EDirectionType::East)
+	{
+		// if east tile is valid
+		if(Position2D.X + 1 < Tiles.Num())
+		{
+			TileResult = Tiles[Position2D.Y][Position2D.X + 1];
+			return TileResult;
+		}
+	}
+
+	return TileResult;
+}
+
+TArray<FTileInfo*> ATBSquareMapGenerator::GetAllAdjacentEmptyTiles(const FTileInfo* SourceTile) const
+{
+	TArray<FTileInfo*> AdjacentEmptyTiles;
+	
+	if(Tiles.Num() <= 0) return AdjacentEmptyTiles;
+	
+	
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::North))
+	{
+		if(TileResult->bIsEmptyTile)
+		{
+			AdjacentEmptyTiles.Add(TileResult);
+		}
+	}
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::South))
+	{
+		if(TileResult->bIsEmptyTile)
+		{
+			AdjacentEmptyTiles.Add(TileResult);
+		}
+	}
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::West))
+	{
+		if(TileResult->bIsEmptyTile)
+		{
+			AdjacentEmptyTiles.Add(TileResult);
+		}
+	}
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::East))
+	{
+		if(TileResult->bIsEmptyTile)
+		{
+			AdjacentEmptyTiles.Add(TileResult);
+		}
+	}
+
+	return AdjacentEmptyTiles;
+}
+
+TArray<FTileInfo*> ATBSquareMapGenerator::GetAllAdjacentTiles(const FTileInfo* SourceTile) const
+{
+	TArray<FTileInfo*> AdjacentEmptyTiles;
+	
+	if(Tiles.Num() <= 0) return AdjacentEmptyTiles;
+	
+	
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::North))
+	{
+		AdjacentEmptyTiles.Add(TileResult);
+	}
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::South))
+	{
+		AdjacentEmptyTiles.Add(TileResult);
+	}
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::West))
+	{
+		AdjacentEmptyTiles.Add(TileResult);
+	}
+	if(FTileInfo* TileResult = GetTileAtDirection(SourceTile, EDirectionType::East))
+	{
+		AdjacentEmptyTiles.Add(TileResult);
+	}
+
+	return AdjacentEmptyTiles;
+}
+
+FTileInfo* ATBSquareMapGenerator::GetRandomEmptyTile() const
+{
+	FTileInfo* FoundTile = nullptr;
+	if(AllTiles.Num() <= 0) return nullptr;
+
+	TArray<FTileInfo*> UncheckedTiles = AllTiles;
+
+	while (UncheckedTiles.Num() > 0)
+	{
+		const int RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, UncheckedTiles.Num()-1);
+		if(UncheckedTiles[RandomIndex]->bIsEmptyTile)
+		{
+			FoundTile = UncheckedTiles[RandomIndex];
+			return FoundTile;
+		}
+		UncheckedTiles.RemoveAt(RandomIndex);
+	}
+
+	return nullptr;
+}

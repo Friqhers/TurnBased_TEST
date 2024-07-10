@@ -2,10 +2,7 @@
 
 
 #include "Mammals/TBMammalBase.h"
-
 #include "Kismet/KismetMathLibrary.h"
-#include "SquareMapGeneration/TBSquareMapGenerator.h"
-#include "SquareMapGeneration/TBTile.h"
 
 // Sets default values
 ATBMammalBase::ATBMammalBase()
@@ -47,19 +44,18 @@ void ATBMammalBase::Tick(float DeltaTime)
 	}
 }
 
-void ATBMammalBase::SetCurrentTile(ATBTile* TargetTile)
+void ATBMammalBase::SetCurrentTile(FTileInfo* TargetPos)
 {
-	CurrentTile = TargetTile;
+	CurrentTile = TargetPos;
 }
 
-ATBTile* ATBMammalBase::GetCurrentTile()
+FTileInfo* ATBMammalBase::GetCurrentTile()
 {
 	return CurrentTile;
 }
 
 void ATBMammalBase::ExecuteTurn()
 {
-	//@TODO: do these in tryeat func
 	if(bCanEat)
 	{
 		EatTarget = GetRandomEatTarget();
@@ -69,25 +65,22 @@ void ATBMammalBase::ExecuteTurn()
 			return;
 		}
 	}
-
 	
 	StartRandomMove();
-	// move random direction 1 unit
-	//TryMove();
 }
 
-ATBTile* ATBMammalBase::GetRandomEatTarget() const
+FTileInfo* ATBMammalBase::GetRandomEatTarget() const
 {
-	TArray<ATBTile*> AdjacentTiles = CurrentTile->GetAllAdjacentTiles();
+	TArray<FTileInfo*> AdjacentTiles = MapGeneratorRef->GetAllAdjacentTiles(CurrentTile);
 
 	if(AdjacentTiles.Num() <= 0)
 		return nullptr;
 
 	// find if there any eatable mammal within 1 unit
-	TArray<ATBTile*> EatableMammalTiles;
+	TArray<FTileInfo*> EatableMammalTiles;
 	for(int i = 0 ; i < AdjacentTiles.Num() ; i++)
 	{
-		if(!AdjacentTiles[i]->IsTileEmpty() && AdjacentTiles[i]->MammalRef->GetClass() == EatableMammalClass)
+		if(!AdjacentTiles[i]->bIsEmptyTile && AdjacentTiles[i]->MammalRef && AdjacentTiles[i]->MammalRef->GetClass() == EatableMammalClass)
 		{
 			EatableMammalTiles.Add(AdjacentTiles[i]);
 		}
@@ -100,11 +93,12 @@ ATBTile* ATBMammalBase::GetRandomEatTarget() const
 	// select random target mammal
 	const int RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, EatableMammalTiles.Num()-1);
 	return EatableMammalTiles[RandomIndex];
+
 }
 
 void ATBMammalBase::StartRandomMove()
 {
-	const TArray<ATBTile*> AdjacentEmptyTiles = CurrentTile->GetAllAdjacentEmptyTiles();
+	const TArray<FTileInfo*> AdjacentEmptyTiles = MapGeneratorRef->GetAllAdjacentEmptyTiles(CurrentTile);
 
 	if(AdjacentEmptyTiles.Num() <= 0)
 	{
@@ -113,38 +107,38 @@ void ATBMammalBase::StartRandomMove()
 	}
 
 	// empty current tile
-	CurrentTile->SetTileEmpty(true);
+	CurrentTile->bIsEmptyTile = true;
 	CurrentTile->MammalRef = nullptr;
 
 	// select random target empty tile to move
 	const int RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, AdjacentEmptyTiles.Num()-1);
 
 	// set move target position that will be used to interpolate in Tick()
-	CurrentMoveTargetPosition = AdjacentEmptyTiles[RandomIndex]->GetActorLocation();
+	CurrentMoveTargetPosition = AdjacentEmptyTiles[RandomIndex]->WordLocation;
 	CurrentMoveTargetPosition.Z = GetActorLocation().Z;
 
-	// apply the move 
+	// apply the move
 	CurrentTile = AdjacentEmptyTiles[RandomIndex];
+	CurrentTile->bIsEmptyTile = false;
 	CurrentTile->MammalRef = this;
-	CurrentTile->SetTileEmpty(false);
+	
 
 	// start the interpolation in Tick()
 	bMoveStarted = true;
 	PrimaryActorTick.bCanEverTick = true;
 }
 
-void ATBMammalBase::StartEat(const ATBTile* TargetTile)
+void ATBMammalBase::StartEat(const FTileInfo* EatTargetTile)
 {
-	if(!TargetTile) return;
-
 	// empty current tile
-	CurrentTile->SetTileEmpty(true);
+	CurrentTile->bIsEmptyTile = true;
 	CurrentTile->MammalRef = nullptr;
 
+	
 	// set move target position that will be used to interpolate in Tick()
-	CurrentMoveTargetPosition = TargetTile->GetActorLocation();
+	CurrentMoveTargetPosition = EatTargetTile->WordLocation;
 	CurrentMoveTargetPosition.Z = GetActorLocation().Z;
-
+	
 	// start the interpolation in Tick()
 	bMoveStarted = true;
 	PrimaryActorTick.bCanEverTick = true;
@@ -163,13 +157,14 @@ void ATBMammalBase::OnMoveFinished(const bool bWasSuccessful)
 		if(bCanStarve)
 			StarveCounter = 0;
 
+		
 		//call on killed event for the victim
 		EatTarget->MammalRef->OnKilled.Broadcast(EatTarget->MammalRef);
 		
-		//apply the move 
+		//apply the move
 		CurrentTile = EatTarget;
 		CurrentTile->MammalRef = this;
-		CurrentTile->SetTileEmpty(false);
+		CurrentTile->bIsEmptyTile  =false;
 	}
 	else if(bCanStarve)
 	{

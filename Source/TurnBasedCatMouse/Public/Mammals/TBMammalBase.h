@@ -4,11 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "SquareMapGeneration/TBSquareMapGenerator.h"
 #include "TBMammalBase.generated.h"
 
-class ATBTile;
 class ATBSquareMapGenerator;
 enum class EDirectionType : uint8;
+
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTurnFinishedSignature, ATBMammalBase*, PlayedMammal, bool, bWasSuccessful);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnKilledSignature, ATBMammalBase*, KilledMammal);
@@ -54,17 +55,22 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Mammals")
 	FLinearColor CurrentTileColor;
 
+public:
+	UPROPERTY(BlueprintReadOnly)
+	ATBSquareMapGenerator* MapGeneratorRef;
+	
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-public:	
+public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 	
-	void SetCurrentTile(ATBTile* TargetTile);
+	void SetCurrentTile(FTileInfo* TargetTile);
 	
-	ATBTile* GetCurrentTile();
+	FTileInfo* GetCurrentTile();
 
 	void ExecuteTurn();
 
@@ -85,36 +91,42 @@ public:
 	FOnTurnFinishedSignature OnTurnFinished;
 	FOnBredSignature OnBred;
 
+	UFUNCTION(BlueprintImplementableEvent)
+	void UpdateDebugWidget(bool bShowDebug);
+
 private:
-	UPROPERTY()
-	ATBTile* CurrentTile;
-	UPROPERTY()
-	ATBTile* EatTarget;
+
+	// Current tile of the mammal
+	FTileInfo* CurrentTile;
+	
+	// Eat target for this round
+	FTileInfo* EatTarget;
 	
 	uint8 StarveCounter;
 	uint8 BreedCounter;
 	uint8 SavedBreedCounter;
-	bool bMoveStarted;
 	FVector CurrentMoveTargetPosition;
-
+	bool bMoveStarted;
+	
 private:
 	/* If possible, starts movement logic that moves mammal 1 unit in a random direction (North, South, East, or West).
 	 * Movement will happen in Tick(). Which calls OnMoveFinished after movement ends.
 	 */
 	void StartRandomMove();
-
-	/* Starts eat logic by moving to target mammal on TargetTile.
+	
+	/**
+	 * @brief Starts eat logic by moving to target mammal on TargetTile.
 	 * Movement will happen in Tick(). Which calls OnMoveFinished after movement ends.
-	 */ 
-	void StartEat(const ATBTile* TargetTile);
+	 * @param EatTargetTile Target tile to eat
+	 */
+	void StartEat(const FTileInfo* EatTargetTile);
 
 	
 	void OnMoveFinished(const bool bWasSuccessful);
 
 	// if there are any "EatableMammalClass" within 1 unit return the tile, otherwise nullptr
-	ATBTile* GetRandomEatTarget() const;
+	FTileInfo* GetRandomEatTarget() const;
 	
 	void TryBreed();
 	void TryStarve();
-	
 };

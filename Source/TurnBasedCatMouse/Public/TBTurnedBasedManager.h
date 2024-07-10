@@ -6,7 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "TBTurnedBasedManager.generated.h"
 
-class ATBTile;
+struct FTileInfo;
 class ATBMammalBase;
 class ATBSquareMapGenerator;
 
@@ -45,10 +45,7 @@ public:
 
 	UPROPERTY(BlueprintReadOnly)
 	ATBSquareMapGenerator* SquareMapGeneratorRef;
-
 private:
-	
-	
 	int CurrentRound;
 
 	// Index of the next cat to move in current round. Resets to zero after each round
@@ -67,14 +64,23 @@ private:
 	 * If breed was successful and finished for the mammal it will be removed from this list.
 	 */
 	TArray<ATBMammalBase*> AllMammalsToBreed;
-
-
+	
 	// Mammals in this list are going to starve after breeding finishes. 
 	TArray<ATBMammalBase*> MammalsToStarve;
 
 	bool bIsRoundOngoing;
+	
+	FTimerHandle TimerHandle_StartNextRound;
 
 private:
+	/**
+	 * @brief Spawns a mammal on the given tile and sets references accordingly.
+	 * @param MammalClass The class of the mammal to spawn.
+	 * @param TargetTile The tile to spawn mammal on.
+	 * @return Returns a pointer to the spawned mammal.
+	 */
+	ATBMammalBase* SpawnMammal(TSubclassOf<ATBMammalBase> MammalClass, FTileInfo* TargetTile) const;
+	
 	// Spawns cats and mouse at random tiles
 	void InitSpawnMammals();
 
@@ -83,6 +89,12 @@ private:
 
 	// Tries to starve mammals in MammalsToStarve list at the end of each round.
 	void TryStarveMammals();
+protected:
+	UFUNCTION(BlueprintImplementableEvent, Category = "Turned Based Manager|Events")
+	void OnCatsWin();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Turned Based Manager|Events")
+	void OnMiceWin();
 private:
 	// EVENTS
 
@@ -116,8 +128,6 @@ private:
 	void OnBred(ATBMammalBase* BredMammal);
 	
 	void OnRoundFinished();
-
-	FTimerHandle TimerHandle_StartNextRound;
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
